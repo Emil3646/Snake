@@ -33,6 +33,72 @@
       position: relative;
       z-index: 2;
     }
+    #mobile-controls {
+      position: fixed;
+      left: 50%;
+      bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+      transform: translateX(-50%);
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 12px;
+      width: min(560px, calc(100% - 12px));
+      z-index: 9997;
+      pointer-events: auto;
+      touch-action: none;
+      user-select: none;
+    }
+    #mobile-controls.is-visible {
+      display: flex;
+    }
+    #mobile-dpad {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(52px, 72px));
+      grid-template-rows: repeat(2, minmax(52px, 72px));
+      gap: 8px;
+      padding: 8px;
+      border-radius: 12px;
+      background: rgba(18, 35, 22, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+    }
+    .mobile-btn {
+      border: 0;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #f6efcd, #cfbf7d);
+      color: #283000;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+      touch-action: none;
+      min-width: 52px;
+      min-height: 52px;
+    }
+    .mobile-btn:active {
+      transform: translateY(1px) scale(0.98);
+      filter: brightness(0.95);
+    }
+    #mobile-up { grid-column: 2; grid-row: 1; }
+    #mobile-left { grid-column: 1; grid-row: 2; }
+    #mobile-down { grid-column: 2; grid-row: 2; }
+    #mobile-right { grid-column: 3; grid-row: 2; }
+    #mobile-pause-btn {
+      min-width: 86px;
+      min-height: 86px;
+      border: 0;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #ffd27a, #ca8a2d);
+      color: #2a1400;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 14px;
+      cursor: pointer;
+      touch-action: none;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+    }
+    body.mobile-controls-active {
+      padding-bottom: 170px;
+    }
   </style>
 </head>
 <body>
@@ -57,6 +123,115 @@ kaboom({
   background: [0, 0, 0, 0], // transparent so CSS meadow shows through
 });
 
+const MOBILE_CONTROL_BREAKPOINT = 980;
+
+function isMobileControlsMode() {
+  try {
+    const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+    const hasTouch = coarse || (navigator && navigator.maxTouchPoints > 0);
+    return !!(hasTouch && window.innerWidth <= MOBILE_CONTROL_BREAKPOINT);
+  } catch (e) {
+    return window.innerWidth <= 760;
+  }
+}
+
+function getLayoutReservedSpace() {
+  const mobileMode = isMobileControlsMode();
+  const uiBar = document.getElementById("ui-bar");
+  const uiTop = mobileMode
+    ? (uiBar ? Math.ceil(uiBar.getBoundingClientRect().height) + 16 : 64)
+    : 52;
+  const mobileControls = document.getElementById("mobile-controls");
+  const mobileVisible = !!(mobileControls && mobileControls.classList.contains("is-visible"));
+  const bottom = mobileVisible ? Math.ceil(mobileControls.getBoundingClientRect().height) + 22 : 0;
+  return { top: Math.max(52, uiTop), bottom: Math.max(0, bottom) };
+}
+
+function handlePauseToggleInput() {
+  if (!started) return resetGame();
+  if (gameOver) return resetGame();
+  if (!paused) showPauseOverlay();
+  else startResumeCountdown();
+}
+
+function attachMobileDirectionButton(btn, dirObj) {
+  if (!btn || !dirObj) return;
+  const handler = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    trySetDir(dirObj);
+  };
+  btn.addEventListener("pointerdown", handler);
+  btn.addEventListener("touchstart", handler, { passive: false });
+}
+
+function ensureMobileControls() {
+  let controls = document.getElementById("mobile-controls");
+  if (!controls) {
+    controls = document.createElement("div");
+    controls.id = "mobile-controls";
+
+    const dpad = document.createElement("div");
+    dpad.id = "mobile-dpad";
+
+    const upBtn = document.createElement("button");
+    upBtn.id = "mobile-up";
+    upBtn.className = "mobile-btn";
+    upBtn.innerHTML = "&uarr;";
+    upBtn.setAttribute("aria-label", "Nach oben");
+
+    const leftBtn = document.createElement("button");
+    leftBtn.id = "mobile-left";
+    leftBtn.className = "mobile-btn";
+    leftBtn.innerHTML = "&larr;";
+    leftBtn.setAttribute("aria-label", "Nach links");
+
+    const downBtn = document.createElement("button");
+    downBtn.id = "mobile-down";
+    downBtn.className = "mobile-btn";
+    downBtn.innerHTML = "&darr;";
+    downBtn.setAttribute("aria-label", "Nach unten");
+
+    const rightBtn = document.createElement("button");
+    rightBtn.id = "mobile-right";
+    rightBtn.className = "mobile-btn";
+    rightBtn.innerHTML = "&rarr;";
+    rightBtn.setAttribute("aria-label", "Nach rechts");
+
+    dpad.appendChild(upBtn);
+    dpad.appendChild(leftBtn);
+    dpad.appendChild(downBtn);
+    dpad.appendChild(rightBtn);
+
+    const pauseBtn = document.createElement("button");
+    pauseBtn.id = "mobile-pause-btn";
+    pauseBtn.innerText = "PAUSE";
+    pauseBtn.setAttribute("aria-label", "Pause oder Fortsetzen");
+
+    controls.appendChild(dpad);
+    controls.appendChild(pauseBtn);
+    document.body.appendChild(controls);
+
+    attachMobileDirectionButton(upBtn, { x: 0, y: -1 });
+    attachMobileDirectionButton(leftBtn, { x: -1, y: 0 });
+    attachMobileDirectionButton(downBtn, { x: 0, y: 1 });
+    attachMobileDirectionButton(rightBtn, { x: 1, y: 0 });
+
+    const pauseHandler = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      handlePauseToggleInput();
+    };
+    pauseBtn.addEventListener("pointerdown", pauseHandler);
+    pauseBtn.addEventListener("touchstart", pauseHandler, { passive: false });
+  }
+
+  const mobileMode = isMobileControlsMode();
+  controls.classList.toggle("is-visible", mobileMode);
+  controls.style.display = mobileMode ? "flex" : "none";
+  document.body.classList.toggle("mobile-controls-active", mobileMode);
+}
+
 /* =======================
    Auto-Scale (passt ins Browserfenster)
 ======================= */
@@ -65,32 +240,35 @@ function applyCanvasScale() {
   if (!canvas) return;
 
   const PAD = 24; // side padding to keep some breathing room
-  const UI_TOP = 52; // reserved top UI bar (pixels)
+  const layout = getLayoutReservedSpace();
   // compute logical canvas size from grid settings to avoid depending on kaboom helpers
   const canvasW = (typeof cols !== 'undefined' ? cols * (typeof cell !== 'undefined' ? cell : 26) : width());
   const canvasH = (typeof rows !== 'undefined' ? rows * (typeof cell !== 'undefined' ? cell : 26) : height());
-  const availW = Math.max(80, window.innerWidth - PAD);
-  const availH = Math.max(80, window.innerHeight - PAD - UI_TOP);
-  const scale = Math.min(availW / canvasW, availH / canvasH, 1);
+  const scaleBaseW = Math.max(80, window.innerWidth - PAD);
+  const scaleBaseH = Math.max(80, window.innerHeight - PAD - layout.top - layout.bottom);
+  const scale = Math.min(scaleBaseW / canvasW, scaleBaseH / canvasH, 1);
   // vertical offset to nudge the entire playfield vertically (pixels)
   // positive → move down, negative → move up
-  const CANVAS_OFFSET_Y = 22;
+  const CANVAS_OFFSET_Y = isMobileControlsMode() ? 0 : 22;
 
   // ensure a wrapper exists to center the canvas reliably
   let wrap = document.getElementById("canvas-wrap");
   if (!wrap) {
     wrap = document.createElement("div");
     wrap.id = "canvas-wrap";
-    wrap.style.width = "100%";
-    // make wrap fill the area under the top UI bar so its children can be vertically centered
-    wrap.style.height = "calc(100% - 52px)";
+    wrap.style.position = "fixed";
+    wrap.style.left = "0";
+    wrap.style.right = "0";
     wrap.style.display = "flex";
     wrap.style.justifyContent = "center";
     wrap.style.alignItems = "center";
     wrap.style.pointerEvents = "auto";
+    wrap.style.zIndex = "2";
     // insert wrapper before canvas
     canvas.parentNode.insertBefore(wrap, canvas);
   }
+  wrap.style.top = `${layout.top}px`;
+  wrap.style.bottom = `${layout.bottom}px`;
   // move canvas into wrapper (if not already)
   if (canvas.parentNode !== wrap) wrap.appendChild(canvas);
 
@@ -100,8 +278,16 @@ function applyCanvasScale() {
   canvas.style.transformOrigin = "center center";
   canvas.style.transform = `translateY(${CANVAS_OFFSET_Y}px) scale(${scale})`;
 }
-window.addEventListener("resize", applyCanvasScale);
+window.addEventListener("resize", () => {
+  ensureMobileControls();
+  applyCanvasScale();
+});
+window.addEventListener("orientationchange", () => {
+  ensureMobileControls();
+  applyCanvasScale();
+});
 // initial apply
+ensureMobileControls();
 applyCanvasScale();
 
 // Digitas logo sprite handling
@@ -1175,7 +1361,8 @@ function ensureHud() {
 function updateHUD() {
   if (!uiText) return;
   const sp = getCurrentSpeed().toFixed(1);
-  const nextText = `SCORE: ${score}   SPEED: ${sp}   (WASD)`;
+  const controlHint = isMobileControlsMode() ? "TOUCH / WASD" : "WASD";
+  const nextText = `SCORE: ${score}   SPEED: ${sp}   (${controlHint})`;
   if (nextText !== hudLastText) {
     uiText.innerText = nextText;
     hudLastText = nextText;
@@ -2105,8 +2292,11 @@ function showStartScreen() {
   ]);
 
   // Start-Hint (blinkend)
+  const startHintText = isMobileControlsMode()
+    ? "PRESS SPACE OR PAUSE BUTTON"
+    : "PRESS SPACE TO START / PAUSE";
   startHint = add([
-    text("PRESS SPACE TO START / PAUSE", { size: 20, font: "pixel" }),
+    text(startHintText, { size: 20, font: "pixel" }),
     pos(width() / 2, height() / 2 - 6),
     anchor("center"),
     color(255, 235, 120),
@@ -2503,8 +2693,9 @@ function showHelpOverlay(){
   const title = document.createElement('div'); title.innerText = 'HOW TO PLAY'; title.style.fontSize = '18px'; title.style.marginBottom = '10px'; title.style.color = '#ffd27a'; panel.appendChild(title);
   const txt = document.createElement('div'); txt.style.whiteSpace = 'pre-wrap'; txt.style.color = '#dfefff'; txt.innerText = (
     'CONTROLS:\n' +
-    '- Move: WASD or Arrow keys\n' +
-    '- Pause / Resume: SPACE\n\n' +
+    '- Desktop Move: WASD or Arrow keys\n' +
+    '- Mobile Move: On-screen arrow buttons\n' +
+    '- Pause / Resume: SPACE or mobile PAUSE button\n\n' +
     'MECHANICS:\n' +
     '- Eat normal apples to score points. Each point increases speed by +0.1 (start 4, max 12).\n' +
     '- After a randomized number of normal apples, a tile will be locked. The tile will blink yellow before it becomes blocked. Hitting a blocked tile ends the game.\n' +
@@ -2545,14 +2736,7 @@ onKeyPress("a", () => trySetDir({ x: -1, y: 0 }));
 onKeyPress("d", () => trySetDir({ x:  1, y: 0 }));
 
 onKeyPress("space", () => {
-  if (!started) return resetGame();
-  if (gameOver) return resetGame();
-  // toggle pause when in-game
-  if (!paused) {
-    showPauseOverlay();
-  } else {
-    startResumeCountdown();
-  }
+  handlePauseToggleInput();
 });
 
 // Fallback: falls Kabooms onKeyPress aus irgendeinem Grund nicht feuert
@@ -2561,17 +2745,7 @@ window.addEventListener("keydown", (e) => {
   const active = document.activeElement;
   if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
   if (e.code === "Space") {
-    if (!started || gameOver) {
-      resetGame();
-      e.preventDefault();
-      return;
-    }
-    // if running, toggle pause / resume countdown
-    if (!paused) {
-      showPauseOverlay();
-    } else {
-      startResumeCountdown();
-    }
+    handlePauseToggleInput();
     e.preventDefault();
   }
 });
@@ -2684,6 +2858,7 @@ onLoad(async () => {
     "pixel",
     "https://raw.githubusercontent.com/google/fonts/main/ofl/pressstart2p/PressStart2P-Regular.ttf"
   );
+  ensureMobileControls();
   applyCanvasScale();
   showStartScreen();
   // make body focusable and focus it so keyboard events are received reliably
