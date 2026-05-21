@@ -96,6 +96,24 @@
       touch-action: none;
       box-shadow: 0 4px 10px rgba(0,0,0,0.35);
     }
+    #mobile-start-btn {
+      min-width: 86px;
+      min-height: 48px;
+      border: 0;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #bff28f, #5ea837);
+      color: #0b2a08;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      touch-action: none;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+    }
+    #mobile-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
     body.mobile-controls-active {
       padding-bottom: 170px;
     }
@@ -148,10 +166,49 @@ function getLayoutReservedSpace() {
 }
 
 function handlePauseToggleInput() {
-  if (!started) return resetGame();
-  if (gameOver) return resetGame();
+  if (!started || gameOver) return;
   if (!paused) showPauseOverlay();
   else startResumeCountdown();
+}
+
+function handleKeyboardSpaceInput() {
+  if (isMobileControlsMode()) return;
+  if (!started || gameOver) {
+    resetGame();
+    return;
+  }
+  handlePauseToggleInput();
+}
+
+function handleMobileStartInput() {
+  if (!isMobileControlsMode()) return;
+  if (!started || gameOver) {
+    resetGame();
+  }
+}
+
+function updateMobileControlState() {
+  const startBtn = document.getElementById("mobile-start-btn");
+  const pauseBtn = document.getElementById("mobile-pause-btn");
+  if (!startBtn || !pauseBtn) return;
+
+  if (!started) {
+    startBtn.style.display = "block";
+    startBtn.innerText = "START";
+    pauseBtn.style.display = "none";
+    return;
+  }
+
+  if (gameOver) {
+    startBtn.style.display = "block";
+    startBtn.innerText = "RESTART";
+    pauseBtn.style.display = "none";
+    return;
+  }
+
+  startBtn.style.display = "none";
+  pauseBtn.style.display = "block";
+  pauseBtn.innerText = paused ? "RESUME" : "PAUSE";
 }
 
 function attachMobileDirectionButton(btn, dirObj) {
@@ -203,13 +260,23 @@ function ensureMobileControls() {
     dpad.appendChild(downBtn);
     dpad.appendChild(rightBtn);
 
+    const actionWrap = document.createElement("div");
+    actionWrap.id = "mobile-actions";
+
+    const startBtn = document.createElement("button");
+    startBtn.id = "mobile-start-btn";
+    startBtn.innerText = "START";
+    startBtn.setAttribute("aria-label", "Spiel starten oder neu starten");
+
     const pauseBtn = document.createElement("button");
     pauseBtn.id = "mobile-pause-btn";
     pauseBtn.innerText = "PAUSE";
     pauseBtn.setAttribute("aria-label", "Pause oder Fortsetzen");
 
     controls.appendChild(dpad);
-    controls.appendChild(pauseBtn);
+    actionWrap.appendChild(startBtn);
+    actionWrap.appendChild(pauseBtn);
+    controls.appendChild(actionWrap);
     document.body.appendChild(controls);
 
     attachMobileDirectionButton(upBtn, { x: 0, y: -1 });
@@ -222,6 +289,13 @@ function ensureMobileControls() {
       e.stopPropagation();
       handlePauseToggleInput();
     };
+    const startHandler = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      handleMobileStartInput();
+    };
+    startBtn.addEventListener("pointerdown", startHandler);
+    startBtn.addEventListener("touchstart", startHandler, { passive: false });
     pauseBtn.addEventListener("pointerdown", pauseHandler);
     pauseBtn.addEventListener("touchstart", pauseHandler, { passive: false });
   }
@@ -230,6 +304,7 @@ function ensureMobileControls() {
   controls.classList.toggle("is-visible", mobileMode);
   controls.style.display = mobileMode ? "flex" : "none";
   document.body.classList.toggle("mobile-controls-active", mobileMode);
+  updateMobileControlState();
 }
 
 /* =======================
@@ -1009,12 +1084,13 @@ function showPauseOverlay(){
   // clear scheduled spawns so timers don't run while paused
   stopSpecialSpawnTimers();
   paused = true;
+  updateMobileControlState();
   const overlay = document.createElement('div'); overlay.id = 'dom-pause-overlay';
   Object.assign(overlay.style, { position:'fixed', left:0, top:0, right:0, bottom:0, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.6)', zIndex:10000 });
   const panel = document.createElement('div');
   Object.assign(panel.style, { width:'min(640px,90%)', maxWidth:'720px', background:'#071018', color:'#fff', padding:'18px', borderRadius:'10px', fontFamily:"'Press Start 2P',monospace", textAlign:'center' });
   const title = document.createElement('div'); title.innerText = 'PAUSED'; title.style.fontSize='28px'; title.style.color='#ffd27a'; panel.appendChild(title);
-  const info = document.createElement('div'); info.innerText = 'Press SPACE to resume (3-2-1)'; info.style.margin='10px 0 6px'; info.style.fontSize='12px'; panel.appendChild(info);
+  const info = document.createElement('div'); info.innerText = isMobileControlsMode() ? 'Press PAUSE button to resume (3-2-1)' : 'Press SPACE to resume (3-2-1)'; info.style.margin='10px 0 6px'; info.style.fontSize='12px'; panel.appendChild(info);
   // leaderboard area
   const lbWrap = document.createElement('div'); lbWrap.style.textAlign='left'; lbWrap.style.maxHeight='none'; lbWrap.style.overflow='visible'; lbWrap.style.margin='6px 0';
   renderLeaderboardTableInto(lbWrap);
@@ -1038,6 +1114,7 @@ let _countdownActive = false;
 function startResumeCountdown(){
   if (!paused || _countdownActive) return;
   _countdownActive = true;
+  updateMobileControlState();
   let n = 3;
   const cd = document.createElement('div'); cd.id='dom-countdown-overlay';
   Object.assign(cd.style, { position:'fixed', left:0, top:0, right:0, bottom:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none', zIndex:11000 });
@@ -1051,6 +1128,7 @@ function startResumeCountdown(){
       hidePauseOverlay();
       paused = false;
       _countdownActive = false;
+      updateMobileControlState();
       try { document.body.focus(); } catch(e){}
       // restart spawn schedulers that were cleared on pause
       try { startSpecialSpawnTimers(); } catch(e){}
@@ -2278,6 +2356,7 @@ function showStartScreen() {
   ensureNameInput();
   // ensure top name input editable on start screen
   setTopNameInputState(true);
+  updateMobileControlState();
   // do not auto-focus the name input on start; user must click to edit
 
   // Titel (grün)
@@ -2293,7 +2372,7 @@ function showStartScreen() {
 
   // Start-Hint (blinkend)
   const startHintText = isMobileControlsMode()
-    ? "PRESS SPACE OR PAUSE BUTTON"
+    ? "PRESS START BUTTON"
     : "PRESS SPACE TO START / PAUSE";
   startHint = add([
     text(startHintText, { size: 20, font: "pixel" }),
@@ -2372,6 +2451,7 @@ function resetGame() {
   if (goOverlay) goOverlay.remove();
   // disable top name input while the game is running (prevent edits during play)
   setTopNameInputState(false);
+  updateMobileControlState();
   // focus body so keyboard input works after clicking start
   try { document.body.focus(); } catch (e) { /* ignore */ }
 }
@@ -2530,6 +2610,7 @@ function step() {
 ======================= */
 function endGame() {
   gameOver = true;
+  updateMobileControlState();
   clearGameOverOverlayTimeout();
   blinkAcc = 0;
 
@@ -2559,7 +2640,7 @@ function endGame() {
   ]);
 
   restartHint = add([
-    text("PRESS SPACE TO RESTART", { size: 18, font: "pixel" }),
+    text(isMobileControlsMode() ? "PRESS RESTART BUTTON" : "PRESS SPACE TO RESTART", { size: 18, font: "pixel" }),
     pos(width() / 2, height() / 2 + 35),
     anchor("center"),
     color(255, 255, 255),
@@ -2693,9 +2774,11 @@ function showHelpOverlay(){
   const title = document.createElement('div'); title.innerText = 'HOW TO PLAY'; title.style.fontSize = '18px'; title.style.marginBottom = '10px'; title.style.color = '#ffd27a'; panel.appendChild(title);
   const txt = document.createElement('div'); txt.style.whiteSpace = 'pre-wrap'; txt.style.color = '#dfefff'; txt.innerText = (
     'CONTROLS:\n' +
+    '- Desktop Start/Pause: SPACE\n' +
     '- Desktop Move: WASD or Arrow keys\n' +
+    '- Mobile Start: START button\n' +
     '- Mobile Move: On-screen arrow buttons\n' +
-    '- Pause / Resume: SPACE or mobile PAUSE button\n\n' +
+    '- Mobile Pause / Resume: PAUSE button\n\n' +
     'MECHANICS:\n' +
     '- Eat normal apples to score points. Each point increases speed by +0.1 (start 4, max 12).\n' +
     '- After a randomized number of normal apples, a tile will be locked. The tile will blink yellow before it becomes blocked. Hitting a blocked tile ends the game.\n' +
@@ -2736,7 +2819,7 @@ onKeyPress("a", () => trySetDir({ x: -1, y: 0 }));
 onKeyPress("d", () => trySetDir({ x:  1, y: 0 }));
 
 onKeyPress("space", () => {
-  handlePauseToggleInput();
+  handleKeyboardSpaceInput();
 });
 
 // Fallback: falls Kabooms onKeyPress aus irgendeinem Grund nicht feuert
@@ -2745,7 +2828,7 @@ window.addEventListener("keydown", (e) => {
   const active = document.activeElement;
   if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
   if (e.code === "Space") {
-    handlePauseToggleInput();
+    handleKeyboardSpaceInput();
     e.preventDefault();
   }
 });
@@ -2861,6 +2944,7 @@ onLoad(async () => {
   ensureMobileControls();
   applyCanvasScale();
   showStartScreen();
+  updateMobileControlState();
   // make body focusable and focus it so keyboard events are received reliably
   document.body.tabIndex = 0;
   document.body.focus();
