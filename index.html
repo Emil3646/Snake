@@ -74,6 +74,16 @@
       touch-action: none;
       min-width: 52px;
       min-height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .mobile-btn .arrow-glyph {
+      width: 24px;
+      height: 24px;
+      fill: #2a3203;
+      filter: drop-shadow(0 1px 0 rgba(255,255,255,0.18));
+      pointer-events: none;
     }
     .mobile-btn:active {
       transform: translateY(1px) scale(0.98);
@@ -84,17 +94,79 @@
     #mobile-down { grid-column: 2; grid-row: 2; }
     #mobile-right { grid-column: 3; grid-row: 2; }
     #mobile-pause-btn {
-      min-width: 86px;
-      min-height: 86px;
+      position: fixed !important;
+      top: calc(8px + env(safe-area-inset-top, 0px)) !important;
+      right: 8px !important;
+      width: 44px;
+      height: 44px;
       border: 0;
-      border-radius: 12px;
-      background: linear-gradient(180deg, #ffd27a, #ca8a2d);
-      color: #2a1400;
+      border-radius: 10px;
+      background: #6fa8ff;
+      color: #021028;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 0;
+      cursor: pointer;
+      touch-action: none;
+      box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 11010;
+    }
+    #mobile-pause-btn .pause-glyph {
+      width: 20px;
+      height: 20px;
+      fill: #021028;
+      pointer-events: none;
+    }
+    .mobile-menu-play-btn {
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 20px;
+      background: linear-gradient(180deg, #bff28f, #5ea837);
+      color: #0b2a08;
       font-family: 'Press Start 2P', monospace;
       font-size: 14px;
       cursor: pointer;
       touch-action: none;
       box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+    }
+    #dom-mobile-start-play {
+      position: fixed;
+      left: 50%;
+      top: auto;
+      bottom: 220px;
+      transform: translateX(-50%);
+      z-index: 11000;
+    }
+    body.mobile-mode #mobile-controls {
+      width: min(560px, calc(100% - 10px));
+      gap: 10px;
+    }
+    body.mobile-mode #mobile-dpad {
+      background: linear-gradient(180deg, rgba(32, 82, 31, 0.88), rgba(20, 62, 28, 0.9));
+      border-radius: 18px;
+      padding: 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.28);
+    }
+    body.mobile-mode .mobile-btn {
+      border-radius: 14px;
+      box-shadow: inset 0 -2px 0 rgba(0,0,0,0.12);
+    }
+    body.mobile-mode .mobile-btn .arrow-glyph {
+      width: 28px;
+      height: 28px;
+    }
+    body.mobile-mode #mobile-pause-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+      top: calc(8px + env(safe-area-inset-top, 0px)) !important;
+      right: 8px !important;
+    }
+    body.mobile-mode #dom-mobile-start-play {
+      box-shadow: 0 8px 20px rgba(0,0,0,0.25);
     }
     body.mobile-controls-active {
       padding-bottom: 170px;
@@ -124,6 +196,8 @@ kaboom({
 });
 
 const MOBILE_CONTROL_BREAKPOINT = 980;
+let lastPauseToggleAt = 0;
+let mobilePauseAnchor = null;
 
 function isMobileControlsMode() {
   try {
@@ -133,6 +207,30 @@ function isMobileControlsMode() {
   } catch (e) {
     return window.innerWidth <= 760;
   }
+}
+
+function getMobileTextScale() {
+  if (!isMobileControlsMode()) return 1;
+  const shortEdge = Math.max(280, Math.min(window.innerWidth, window.innerHeight));
+  return Math.max(0.58, Math.min(1, shortEdge / 430));
+}
+
+function getMobileUiScale() {
+  if (!isMobileControlsMode()) return 1;
+  const shortEdge = Math.max(280, Math.min(window.innerWidth, window.innerHeight));
+  return Math.max(0.7, Math.min(1, shortEdge / 420));
+}
+
+function getResponsiveTextSize(basePx, minPx) {
+  if (!isMobileControlsMode()) return basePx;
+  const scaled = Math.round(basePx * getMobileTextScale());
+  return Math.max(minPx, scaled);
+}
+
+function getResponsiveUiSize(basePx, minPx) {
+  if (!isMobileControlsMode()) return basePx;
+  const scaled = Math.round(basePx * getMobileUiScale());
+  return Math.max(minPx, scaled);
 }
 
 function getLayoutReservedSpace() {
@@ -148,6 +246,11 @@ function getLayoutReservedSpace() {
 }
 
 function handlePauseToggleInput() {
+  const now = Date.now();
+  // Mobile browsers can fire near-duplicate press events; ignore rapid re-triggers.
+  if (now - lastPauseToggleAt < 280) return;
+  lastPauseToggleAt = now;
+
   if (!started) return resetGame();
   if (gameOver) return resetGame();
   if (!paused) showPauseOverlay();
@@ -165,8 +268,42 @@ function attachMobileDirectionButton(btn, dirObj) {
   btn.addEventListener("touchstart", handler, { passive: false });
 }
 
+function setMobileArrowIcon(btn, dirName) {
+  if (!btn) return;
+  const rotation = {
+    up: 0,
+    right: 90,
+    down: 180,
+    left: 270,
+  };
+  const deg = rotation[dirName] || 0;
+  btn.innerHTML = `<svg class="arrow-glyph" viewBox="0 0 24 24" aria-hidden="true" style="transform: rotate(${deg}deg)"><path d="M12 3l7 8h-4v10H9V11H5z"/></svg>`;
+}
+
+function setMobilePauseIcon(btn) {
+  if (!btn) return;
+  btn.innerHTML = '<svg class="pause-glyph" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>';
+}
+
 function ensureMobileControls() {
   let controls = document.getElementById("mobile-controls");
+  let pauseBtn = document.getElementById("mobile-pause-btn");
+
+  if (!pauseBtn) {
+    pauseBtn = document.createElement("button");
+    pauseBtn.id = "mobile-pause-btn";
+    setMobilePauseIcon(pauseBtn);
+    pauseBtn.setAttribute("aria-label", "Pause oder Fortsetzen");
+    const pauseHandler = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      handlePauseToggleInput();
+    };
+    pauseBtn.addEventListener("pointerdown", pauseHandler);
+    pauseBtn.addEventListener("touchstart", pauseHandler, { passive: false });
+    document.body.appendChild(pauseBtn);
+  }
+
   if (!controls) {
     controls = document.createElement("div");
     controls.id = "mobile-controls";
@@ -177,39 +314,33 @@ function ensureMobileControls() {
     const upBtn = document.createElement("button");
     upBtn.id = "mobile-up";
     upBtn.className = "mobile-btn";
-    upBtn.innerHTML = "&uarr;";
     upBtn.setAttribute("aria-label", "Nach oben");
+    setMobileArrowIcon(upBtn, "up");
 
     const leftBtn = document.createElement("button");
     leftBtn.id = "mobile-left";
     leftBtn.className = "mobile-btn";
-    leftBtn.innerHTML = "&larr;";
     leftBtn.setAttribute("aria-label", "Nach links");
+    setMobileArrowIcon(leftBtn, "left");
 
     const downBtn = document.createElement("button");
     downBtn.id = "mobile-down";
     downBtn.className = "mobile-btn";
-    downBtn.innerHTML = "&darr;";
     downBtn.setAttribute("aria-label", "Nach unten");
+    setMobileArrowIcon(downBtn, "down");
 
     const rightBtn = document.createElement("button");
     rightBtn.id = "mobile-right";
     rightBtn.className = "mobile-btn";
-    rightBtn.innerHTML = "&rarr;";
     rightBtn.setAttribute("aria-label", "Nach rechts");
+    setMobileArrowIcon(rightBtn, "right");
 
     dpad.appendChild(upBtn);
     dpad.appendChild(leftBtn);
     dpad.appendChild(downBtn);
     dpad.appendChild(rightBtn);
 
-    const pauseBtn = document.createElement("button");
-    pauseBtn.id = "mobile-pause-btn";
-    pauseBtn.innerText = "PAUSE";
-    pauseBtn.setAttribute("aria-label", "Pause oder Fortsetzen");
-
     controls.appendChild(dpad);
-    controls.appendChild(pauseBtn);
     document.body.appendChild(controls);
 
     attachMobileDirectionButton(upBtn, { x: 0, y: -1 });
@@ -217,19 +348,17 @@ function ensureMobileControls() {
     attachMobileDirectionButton(downBtn, { x: 0, y: 1 });
     attachMobileDirectionButton(rightBtn, { x: 1, y: 0 });
 
-    const pauseHandler = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      handlePauseToggleInput();
-    };
-    pauseBtn.addEventListener("pointerdown", pauseHandler);
-    pauseBtn.addEventListener("touchstart", pauseHandler, { passive: false });
   }
 
   const mobileMode = isMobileControlsMode();
   controls.classList.toggle("is-visible", mobileMode);
   controls.style.display = mobileMode ? "flex" : "none";
+  if (pauseBtn) pauseBtn.style.display = mobileMode ? "flex" : "none";
   document.body.classList.toggle("mobile-controls-active", mobileMode);
+  document.body.classList.toggle("mobile-mode", mobileMode);
+
+  const menuStartBtn = document.getElementById('dom-mobile-start-play');
+  if (menuStartBtn) menuStartBtn.style.display = (mobileMode && !started) ? 'block' : 'none';
 }
 
 /* =======================
@@ -280,15 +409,189 @@ function applyCanvasScale() {
 }
 window.addEventListener("resize", () => {
   ensureMobileControls();
+  applyResponsiveDomFonts();
+  applyResponsiveUiLayout();
   applyCanvasScale();
 });
 window.addEventListener("orientationchange", () => {
   ensureMobileControls();
+  applyResponsiveDomFonts();
+  applyResponsiveUiLayout();
   applyCanvasScale();
 });
 // initial apply
 ensureMobileControls();
+applyResponsiveDomFonts();
+applyResponsiveUiLayout();
 applyCanvasScale();
+
+function applyResponsiveDomFonts() {
+  const hud = document.getElementById('dom-hud');
+  if (hud) hud.style.fontSize = `${getResponsiveTextSize(16, 11)}px`;
+
+  const pauseOverlay = document.getElementById('dom-pause-overlay');
+  if (pauseOverlay) {
+    const title = pauseOverlay.querySelector('div > div');
+    if (title) title.style.fontSize = `${getResponsiveTextSize(28, 18)}px`;
+  }
+
+  const helpStart = document.getElementById('dom-help-btn-start');
+  if (helpStart) helpStart.style.fontSize = `${getResponsiveTextSize(20, 13)}px`;
+
+  const mobileStart = document.getElementById('dom-mobile-start-play');
+  if (mobileStart) mobileStart.style.fontSize = `${getResponsiveTextSize(14, 11)}px`;
+}
+
+function applyResponsiveUiLayout() {
+  const mobile = isMobileControlsMode();
+
+  const uiBar = document.getElementById('ui-bar');
+  if (uiBar) {
+    if (mobile) {
+      uiBar.style.top = '6px';
+      uiBar.style.width = `min(${getResponsiveUiSize(720, 320)}px, 96%)`;
+      uiBar.style.height = `${getResponsiveUiSize(70, 56)}px`;
+      uiBar.style.borderRadius = `${getResponsiveUiSize(12, 8)}px`;
+      uiBar.style.display = 'grid';
+      uiBar.style.gridTemplateColumns = 'minmax(110px, 44%) 1fr';
+      uiBar.style.alignItems = 'center';
+      uiBar.style.columnGap = `${getResponsiveUiSize(8, 4)}px`;
+      uiBar.style.padding = `0 ${getResponsiveUiSize(8, 4)}px`;
+    } else {
+      uiBar.style.top = '8px';
+      uiBar.style.width = 'min(720px, 90%)';
+      uiBar.style.height = '48px';
+      uiBar.style.borderRadius = '8px';
+      uiBar.style.display = 'flex';
+      uiBar.style.gridTemplateColumns = '';
+      uiBar.style.columnGap = '';
+      uiBar.style.padding = '';
+    }
+  }
+
+  const nameWrap = document.getElementById('dom-name-wrap');
+  if (nameWrap && nameWrap.parentNode && nameWrap.parentNode.id === 'ui-bar') {
+    nameWrap.style.marginLeft = mobile ? '0' : '12px';
+    nameWrap.style.gap = `${getResponsiveUiSize(4, 2)}px`;
+    nameWrap.style.marginRight = mobile ? '0' : 'auto';
+    nameWrap.style.minWidth = mobile ? '0' : '';
+    const label = nameWrap.querySelector('div');
+    if (label) label.style.fontSize = `${getResponsiveTextSize(11, 9)}px`;
+    const input = document.getElementById('dom-player-name');
+    if (input) {
+      input.style.width = `${getResponsiveUiSize(160, 104)}px`;
+      input.style.fontSize = `${getResponsiveTextSize(12, 9)}px`;
+      input.style.padding = `${getResponsiveUiSize(6, 4)}px ${getResponsiveUiSize(8, 6)}px`;
+    }
+  }
+
+  const hud = document.getElementById('dom-hud');
+  if (hud) {
+    hud.style.textAlign = mobile ? 'right' : 'center';
+    hud.style.whiteSpace = mobile ? 'pre-line' : 'nowrap';
+    hud.style.lineHeight = mobile ? '1.25' : '1';
+    hud.style.justifySelf = mobile ? 'end' : '';
+  }
+
+  const helpStart = document.getElementById('dom-help-btn-start');
+  if (helpStart) {
+    helpStart.style.width = `${getResponsiveUiSize(44, 34)}px`;
+    helpStart.style.height = `${getResponsiveUiSize(44, 34)}px`;
+    if (mobile && uiBar) {
+      const barRect = uiBar.getBoundingClientRect();
+      const pauseSize = Math.round(getResponsiveUiSize(54, 46));
+      const gap = 8;
+      helpStart.style.top = `${Math.round(barRect.bottom + 8)}px`;
+      helpStart.style.right = `${10 + pauseSize + gap}px`;
+    } else {
+      helpStart.style.top = '20px';
+      helpStart.style.right = '20px';
+    }
+  }
+
+  const pauseBtn = document.getElementById('mobile-pause-btn');
+  if (pauseBtn) {
+    if (mobile) {
+      const pauseSize = Math.round(getResponsiveUiSize(44, 34));
+      pauseBtn.style.width = `${pauseSize}px`;
+      pauseBtn.style.height = `${pauseSize}px`;
+
+      if (helpStart) {
+        const topPos = uiBar
+          ? Math.round(uiBar.getBoundingClientRect().bottom + 8)
+          : Math.round(8 + (window.visualViewport ? window.visualViewport.offsetTop : 0));
+        const rightPos = 10;
+        mobilePauseAnchor = {
+          top: Math.max(6, topPos),
+          right: Math.max(8, rightPos),
+        };
+        pauseBtn.style.setProperty('top', `${mobilePauseAnchor.top}px`, 'important');
+        pauseBtn.style.setProperty('right', `${mobilePauseAnchor.right}px`, 'important');
+      } else if (mobilePauseAnchor) {
+        pauseBtn.style.setProperty('top', `${mobilePauseAnchor.top}px`, 'important');
+        pauseBtn.style.setProperty('right', `${mobilePauseAnchor.right}px`, 'important');
+      } else if (uiBar) {
+        const barRect = uiBar.getBoundingClientRect();
+        const fallbackTop = Math.round(barRect.bottom + 8);
+        const fallbackRight = 62;
+        pauseBtn.style.setProperty('top', `${Math.max(6, fallbackTop)}px`, 'important');
+        pauseBtn.style.setProperty('right', `${fallbackRight}px`, 'important');
+        mobilePauseAnchor = {
+          top: Math.max(6, fallbackTop),
+          right: fallbackRight,
+        };
+      } else {
+        pauseBtn.style.setProperty('top', 'calc(8px + env(safe-area-inset-top, 0px))', 'important');
+        pauseBtn.style.setProperty('right', '8px', 'important');
+      }
+    } else {
+      mobilePauseAnchor = null;
+      pauseBtn.style.setProperty('top', 'calc(8px + env(safe-area-inset-top, 0px))', 'important');
+      pauseBtn.style.setProperty('right', '8px', 'important');
+    }
+  }
+
+  const mobileStartBtn = document.getElementById('dom-mobile-start-play');
+  if (mobileStartBtn) {
+    const controls = document.getElementById('mobile-controls');
+    if (mobile && controls && controls.classList.contains('is-visible')) {
+      const ch = Math.ceil(controls.getBoundingClientRect().height);
+      mobileStartBtn.style.bottom = `${ch + 26}px`;
+    } else {
+      mobileStartBtn.style.bottom = '220px';
+    }
+    mobileStartBtn.style.padding = `${getResponsiveUiSize(12, 8)}px ${getResponsiveUiSize(20, 12)}px`;
+    mobileStartBtn.style.borderRadius = `${getResponsiveUiSize(10, 8)}px`;
+    mobileStartBtn.style.maxWidth = mobile ? '84%' : '';
+  }
+
+  const mobileControls = document.getElementById('mobile-controls');
+  if (mobileControls && mobile) {
+    mobileControls.style.width = `min(${getResponsiveUiSize(560, 280)}px, calc(100% - 12px))`;
+    mobileControls.style.gap = `${getResponsiveUiSize(12, 8)}px`;
+  }
+
+  const pausePanel = document.querySelector('#dom-pause-overlay > div');
+  if (pausePanel) {
+    pausePanel.style.width = mobile ? `min(${getResponsiveUiSize(640, 300)}px, 92%)` : 'min(640px,90%)';
+    pausePanel.style.padding = `${getResponsiveUiSize(18, 12)}px`;
+    pausePanel.style.borderRadius = `${getResponsiveUiSize(10, 8)}px`;
+  }
+
+  const gameOverPanel = document.querySelector('#dom-gameover-overlay > div');
+  if (gameOverPanel) {
+    gameOverPanel.style.width = mobile ? `min(${getResponsiveUiSize(640, 300)}px, 92%)` : 'min(640px,90%)';
+    gameOverPanel.style.padding = `${getResponsiveUiSize(20, 12)}px`;
+    gameOverPanel.style.borderRadius = `${getResponsiveUiSize(10, 8)}px`;
+  }
+
+  const helpPanel = document.querySelector('#dom-help-overlay > div');
+  if (helpPanel) {
+    helpPanel.style.width = mobile ? `min(${getResponsiveUiSize(760, 320)}px, 94%)` : 'min(760px,92%)';
+    helpPanel.style.padding = `${getResponsiveUiSize(18, 12)}px`;
+    helpPanel.style.borderRadius = `${getResponsiveUiSize(10, 8)}px`;
+  }
+}
 
 // Digitas logo sprite handling
 let digitasLoaded = false;
@@ -1004,6 +1307,7 @@ function scheduleGreenSpawn() {
 
 // Pause overlay (shows leaderboard) and resume countdown
 function showPauseOverlay(){
+  const mobile = isMobileControlsMode();
   // if already present, keep it
   if (document.getElementById('dom-pause-overlay')) return;
   // clear scheduled spawns so timers don't run while paused
@@ -1012,21 +1316,49 @@ function showPauseOverlay(){
   const overlay = document.createElement('div'); overlay.id = 'dom-pause-overlay';
   Object.assign(overlay.style, { position:'fixed', left:0, top:0, right:0, bottom:0, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.6)', zIndex:10000 });
   const panel = document.createElement('div');
-  Object.assign(panel.style, { width:'min(640px,90%)', maxWidth:'720px', background:'#071018', color:'#fff', padding:'18px', borderRadius:'10px', fontFamily:"'Press Start 2P',monospace", textAlign:'center' });
-  const title = document.createElement('div'); title.innerText = 'PAUSED'; title.style.fontSize='28px'; title.style.color='#ffd27a'; panel.appendChild(title);
-  const info = document.createElement('div'); info.innerText = 'Press SPACE to resume (3-2-1)'; info.style.margin='10px 0 6px'; info.style.fontSize='12px'; panel.appendChild(info);
+  Object.assign(panel.style, { width: mobile ? 'min(460px,94%)' : 'min(640px,90%)', maxWidth:'720px', maxHeight:'86vh', overflowY:'auto', background:'#071018', color:'#fff', padding: mobile ? '14px' : '18px', borderRadius:'10px', fontFamily:"'Press Start 2P',monospace", textAlign:'center', position:'relative' });
+  const title = document.createElement('div'); title.innerText = 'PAUSED'; title.style.fontSize=`${getResponsiveTextSize(28, 18)}px`; title.style.color='#ffd27a'; panel.appendChild(title);
+  const info = document.createElement('div'); info.innerText = isMobileControlsMode() ? 'Tap X to resume (3-2-1)' : 'Press SPACE to resume (3-2-1)'; info.style.margin='10px 0 6px'; info.style.fontSize=`${getResponsiveTextSize(12, 10)}px`; panel.appendChild(info);
+  if (isMobileControlsMode()) {
+    const closeBtn = document.createElement('button');
+    closeBtn.innerText = 'X';
+    closeBtn.setAttribute('aria-label', 'Pause-Menue schliessen');
+    Object.assign(closeBtn.style, {
+      position:'absolute',
+      top:'8px',
+      right:'8px',
+      width:'32px',
+      height:'32px',
+      borderRadius:'8px',
+      border:'none',
+      background:'#e74c3c',
+      color:'#fff',
+      cursor:'pointer',
+      fontFamily:"'Press Start 2P',monospace",
+      fontSize:`${getResponsiveTextSize(14, 11)}px`,
+      lineHeight:'1',
+      display:'flex',
+      alignItems:'center',
+      justifyContent:'center',
+      boxShadow:'0 4px 10px rgba(0,0,0,0.35)'
+    });
+    closeBtn.addEventListener('click', () => { startResumeCountdown(); });
+    panel.appendChild(closeBtn);
+  }
   // leaderboard area
-  const lbWrap = document.createElement('div'); lbWrap.style.textAlign='left'; lbWrap.style.maxHeight='none'; lbWrap.style.overflow='visible'; lbWrap.style.margin='6px 0';
-  renderLeaderboardTableInto(lbWrap);
+  const lbWrap = document.createElement('div'); lbWrap.style.textAlign='left'; lbWrap.style.maxHeight= mobile ? '200px' : 'none'; lbWrap.style.overflow='auto'; lbWrap.style.margin='6px 0'; lbWrap.style.border='1px solid rgba(255,255,255,0.12)'; lbWrap.style.borderRadius='8px'; lbWrap.style.padding='4px';
+  renderLeaderboardTableInto(lbWrap, mobile ? { maxCols: 5, fontSize: 8, compact: true } : { maxCols: LB_MAX, fontSize: 7 });
   panel.appendChild(lbWrap);
   // help button in pause panel
   const helpBtn = document.createElement('button'); helpBtn.innerText = '?';
-  Object.assign(helpBtn.style, { marginTop:'10px', marginLeft:'8px', padding:'8px 10px', borderRadius:'6px', border:'none', background:'#6fa8ff', color:'#021028', cursor:'pointer', fontFamily:"'Press Start 2P',monospace", fontSize:'14px' });
+  Object.assign(helpBtn.style, { marginTop:'10px', marginLeft:'8px', padding:'8px 10px', borderRadius:'6px', border:'none', background:'#6fa8ff', color:'#021028', cursor:'pointer', fontFamily:"'Press Start 2P',monospace", fontSize:`${getResponsiveTextSize(14, 11)}px` });
   helpBtn.title = 'Help';
   helpBtn.addEventListener('click', ()=>{ try { showHelpOverlay(); } catch(e){} });
   panel.appendChild(helpBtn);
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
+  applyResponsiveDomFonts();
+  applyResponsiveUiLayout();
   try { overlay.focus(); } catch(e){}
 }
 
@@ -1041,7 +1373,7 @@ function startResumeCountdown(){
   let n = 3;
   const cd = document.createElement('div'); cd.id='dom-countdown-overlay';
   Object.assign(cd.style, { position:'fixed', left:0, top:0, right:0, bottom:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none', zIndex:11000 });
-  const num = document.createElement('div'); num.innerText = String(n); Object.assign(num.style, { fontFamily: "'Press Start 2P',monospace", fontSize: '120px', color:'#fff', textAlign:'center', textShadow:'0 0 12px rgba(0,0,0,0.6)' });
+  const num = document.createElement('div'); num.innerText = String(n); Object.assign(num.style, { fontFamily: "'Press Start 2P',monospace", fontSize: `${getResponsiveTextSize(120, 56)}px`, color:'#fff', textAlign:'center', textShadow:'0 0 12px rgba(0,0,0,0.6)' });
   cd.appendChild(num); document.body.appendChild(cd);
   const iv = setInterval(()=>{
     n -= 1;
@@ -1349,7 +1681,7 @@ function ensureHud() {
     el.id = "dom-hud";
     el.style.color = "#fff8e0";
     el.style.fontFamily = "'Press Start 2P', monospace";
-    el.style.fontSize = "16px";
+    el.style.fontSize = `${getResponsiveTextSize(16, 11)}px`;
     el.style.pointerEvents = "none";
     el.style.zIndex = 9999;
     el.style.letterSpacing = "1px";
@@ -1357,12 +1689,15 @@ function ensureHud() {
   }
   uiText = el;
   hudLastText = "";
+  applyResponsiveDomFonts();
+  applyResponsiveUiLayout();
 }
 function updateHUD() {
   if (!uiText) return;
   const sp = getCurrentSpeed().toFixed(1);
-  const controlHint = isMobileControlsMode() ? "TOUCH / WASD" : "WASD";
-  const nextText = `SCORE: ${score}   SPEED: ${sp}   (${controlHint})`;
+  const nextText = isMobileControlsMode()
+    ? `SCORE ${score}\nSPEED ${sp}`
+    : `SCORE: ${score}   SPEED: ${sp}   (WASD)`;
   if (nextText !== hudLastText) {
     uiText.innerText = nextText;
     hudLastText = nextText;
@@ -2008,55 +2343,52 @@ function formatPlayedTime(totalSec) {
   return `${mm}:${ss}`;
 }
 
-function buildLeaderboardTable(list) {
+function buildLeaderboardTable(list, opts = {}) {
+  const maxCols = Math.max(3, Math.min(LB_MAX, Number(opts.maxCols) || LB_MAX));
+  const tableFont = Math.max(6, Number(opts.fontSize) || 7);
+  const compact = !!opts.compact;
   const table = document.createElement('table');
   table.style.width = '100%';
   table.style.tableLayout = 'fixed';
   table.style.borderCollapse = 'collapse';
   table.style.fontFamily = "'Press Start 2P',monospace";
-  table.style.fontSize = '7px';
+  table.style.fontSize = `${tableFont}px`;
   table.style.lineHeight = '1.1';
 
   const medalBg = ['rgba(255,215,0,0.16)', 'rgba(192,192,192,0.16)', 'rgba(205,127,50,0.16)'];
   const medalBorder = ['#ffd700', '#c0c0c0', '#cd7f32'];
-  const rows = [
-    { label: 'name', get: (it) => it.name },
-    { label: 'score', get: (it) => String(it.score) },
-    { label: 'time', get: (it) => formatPlayedTime(it.playedSec) },
-    { label: 'red', get: (it) => String(it.stats.applesNormal) },
-    { label: 'gold', get: (it) => String(it.stats.applesGolden) },
-    { label: 'green', get: (it) => String(it.stats.applesGreen) },
-    { label: 'wall', get: (it) => String(it.stats.blockedEatenBlue) },
+  const cols = [
+    { label: '#', get: (_it, idx) => String(idx + 1) },
+    { label: 'name', get: (it) => it ? it.name : '-' },
+    { label: 'score', get: (it) => it ? String(it.score) : '-' },
+    { label: 'time', get: (it) => it ? formatPlayedTime(it.playedSec) : '-' },
+    { label: 'red', get: (it) => it ? String(it.stats.applesNormal) : '-' },
+    { label: 'gold', get: (it) => it ? String(it.stats.applesGolden) : '-' },
+    { label: 'green', get: (it) => it ? String(it.stats.applesGreen) : '-' },
+    { label: 'wall', get: (it) => it ? String(it.stats.blockedEatenBlue) : '-' },
   ];
 
   const thead = document.createElement('thead');
   const trHead = document.createElement('tr');
-  const topLeft = document.createElement('th');
-  topLeft.innerText = '';
-  topLeft.style.textAlign = 'left';
-  topLeft.style.padding = '2px 3px';
-  topLeft.style.border = '1px solid rgba(255,255,255,0.2)';
-  topLeft.style.background = 'rgba(255,255,255,0.08)';
-  topLeft.style.width = '84px';
-  topLeft.style.maxWidth = '84px';
-  topLeft.style.overflow = 'hidden';
-  topLeft.style.textOverflow = 'ellipsis';
-  topLeft.style.whiteSpace = 'nowrap';
-  trHead.appendChild(topLeft);
-  for (let i = 0; i < LB_MAX; i++) {
+  for (let i = 0; i < cols.length; i++) {
     const th = document.createElement('th');
-    th.innerText = String(i + 1);
+    th.innerText = cols[i].label;
     th.style.textAlign = 'center';
     th.style.padding = '2px 2px';
     th.style.border = '1px solid rgba(255,255,255,0.2)';
     th.style.minWidth = '0';
-    if (i < 3) {
-      th.style.background = medalBg[i];
-      th.style.color = medalBorder[i];
+    if (i === 0) {
+      th.style.background = 'rgba(255,255,255,0.1)';
+      th.style.color = '#ffd27a';
       th.style.fontWeight = 'bold';
     } else {
       th.style.background = 'rgba(255,255,255,0.05)';
       th.style.color = '#dbe9ff';
+    }
+    if (i === 1) {
+      th.style.width = compact ? '76px' : '104px';
+      th.style.maxWidth = compact ? '76px' : '104px';
+      th.style.textAlign = 'left';
     }
     trHead.appendChild(th);
   }
@@ -2064,26 +2396,12 @@ function buildLeaderboardTable(list) {
   table.appendChild(thead);
 
   const tbody = document.createElement('tbody');
-  for (const row of rows) {
+  for (let i = 0; i < maxCols; i++) {
+    const entry = list[i] || null;
     const tr = document.createElement('tr');
-    const th = document.createElement('th');
-    th.innerText = row.label;
-    th.style.textAlign = 'left';
-    th.style.padding = '2px 3px';
-    th.style.border = '1px solid rgba(255,255,255,0.2)';
-    th.style.background = 'rgba(255,255,255,0.06)';
-    th.style.color = '#eef6ff';
-    th.style.width = '84px';
-    th.style.maxWidth = '84px';
-    th.style.overflow = 'hidden';
-    th.style.textOverflow = 'ellipsis';
-    th.style.whiteSpace = 'nowrap';
-    tr.appendChild(th);
-
-    for (let i = 0; i < LB_MAX; i++) {
-      const entry = list[i] || null;
-      const td = document.createElement('td');
-      td.innerText = entry ? row.get(entry) : '-';
+    for (let c = 0; c < cols.length; c++) {
+      const td = document.createElement(c === 0 ? 'th' : 'td');
+      td.innerText = cols[c].get(entry, i);
       td.style.textAlign = 'center';
       td.style.padding = '2px 2px';
       td.style.border = '1px solid rgba(255,255,255,0.2)';
@@ -2091,8 +2409,13 @@ function buildLeaderboardTable(list) {
       td.style.overflow = 'hidden';
       td.style.textOverflow = 'ellipsis';
       td.style.whiteSpace = 'nowrap';
+      if (c === 1) td.style.textAlign = 'left';
+      if (c === 0) {
+        td.style.fontWeight = 'bold';
+      }
       if (i < 3) {
         td.style.background = medalBg[i];
+        if (c === 0) td.style.color = medalBorder[i];
       } else {
         td.style.background = 'rgba(0,0,0,0.18)';
       }
@@ -2104,14 +2427,14 @@ function buildLeaderboardTable(list) {
   return table;
 }
 
-function renderLeaderboardTableInto(container) {
+function renderLeaderboardTableInto(container, opts = {}) {
   while (container.firstChild) container.removeChild(container.firstChild);
   const list = loadLeaderboard();
   if (list.length === 0) {
     container.innerHTML = '<div style="opacity:.8">No scores yet</div>';
     return;
   }
-  container.appendChild(buildLeaderboardTable(list));
+  container.appendChild(buildLeaderboardTable(list, opts));
 }
 
 function loadLeaderboard() {
@@ -2278,11 +2601,22 @@ function showStartScreen() {
   ensureNameInput();
   // ensure top name input editable on start screen
   setTopNameInputState(true);
+
+  const oldMobileStart = document.getElementById('dom-mobile-start-play');
+  if (oldMobileStart) oldMobileStart.remove();
+  if (isMobileControlsMode()) {
+    const mobileStartBtn = document.createElement('button');
+    mobileStartBtn.id = 'dom-mobile-start-play';
+    mobileStartBtn.className = 'mobile-menu-play-btn';
+    mobileStartBtn.innerText = 'PLAY';
+    mobileStartBtn.addEventListener('click', () => { resetGame(); });
+    document.body.appendChild(mobileStartBtn);
+  }
   // do not auto-focus the name input on start; user must click to edit
 
   // Titel (grün)
   startTitle = add([
-    text("SNAKE", { size: 72, font: "pixel" }),
+    text("SNAKE", { size: getResponsiveTextSize(72, 34), font: "pixel" }),
     pos(width() / 2, height() / 2 - 90),
     anchor("center"),
     color(80, 255, 120),
@@ -2293,10 +2627,10 @@ function showStartScreen() {
 
   // Start-Hint (blinkend)
   const startHintText = isMobileControlsMode()
-    ? "PRESS SPACE OR PAUSE BUTTON"
+    ? "TAP PLAY TO START"
     : "PRESS SPACE TO START / PAUSE";
   startHint = add([
-    text(startHintText, { size: 20, font: "pixel" }),
+    text(startHintText, { size: getResponsiveTextSize(20, 12), font: "pixel" }),
     pos(width() / 2, height() / 2 - 6),
     anchor("center"),
     color(255, 235, 120),
@@ -2309,6 +2643,8 @@ function showStartScreen() {
   // (Short summary removed; help available via ? button)
 
   // long explanation removed; use Help (?) button instead
+  applyResponsiveDomFonts();
+  applyResponsiveUiLayout();
 }
 
 /* =======================
@@ -2367,11 +2703,14 @@ function resetGame() {
   if (sbtn) sbtn.style.display = 'none';
   // remove start-help button when game starts
   try { const hb = document.getElementById('dom-help-btn-start'); if (hb) hb.remove(); } catch(e){}
+  try { const ms = document.getElementById('dom-mobile-start-play'); if (ms) ms.remove(); } catch(e){}
   // remove any game-over overlay from previous session
   const goOverlay = document.getElementById('dom-gameover-overlay');
   if (goOverlay) goOverlay.remove();
   // disable top name input while the game is running (prevent edits during play)
   setTopNameInputState(false);
+  applyResponsiveDomFonts();
+  applyResponsiveUiLayout();
   // focus body so keyboard input works after clicking start
   try { document.body.focus(); } catch (e) { /* ignore */ }
 }
@@ -2549,7 +2888,7 @@ function endGame() {
   } catch (e) { /* ignore */ }
 
   gameOverTitle = add([
-    text("GAME OVER", { size: 56, font: "pixel" }),
+    text("GAME OVER", { size: getResponsiveTextSize(56, 30), font: "pixel" }),
     pos(width() / 2, height() / 2 - 35),
     anchor("center"),
     color(255, 0, 0),
@@ -2559,7 +2898,7 @@ function endGame() {
   ]);
 
   restartHint = add([
-    text("PRESS SPACE TO RESTART", { size: 18, font: "pixel" }),
+    text("PRESS SPACE TO RESTART", { size: getResponsiveTextSize(18, 11), font: "pixel" }),
     pos(width() / 2, height() / 2 + 35),
     anchor("center"),
     color(255, 255, 255),
@@ -2578,6 +2917,8 @@ function endGame() {
 
 // Game Over overlay: centered DOM panel with leaderboard and restart
 function showGameOverOverlay(){
+  const mobile = isMobileControlsMode();
+  const lbOpts = mobile ? { maxCols: 5, fontSize: 8, compact: true } : { maxCols: LB_MAX, fontSize: 7 };
   // remove previous if present
   const prev = document.getElementById('dom-gameover-overlay'); if (prev) prev.remove();
 
@@ -2585,32 +2926,33 @@ function showGameOverOverlay(){
   Object.assign(overlay.style, { position:'fixed', left:0, top:0, right:0, bottom:0, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.6)', zIndex:10000 });
 
   const panel = document.createElement('div');
-  Object.assign(panel.style, { width:'min(640px,90%)', maxWidth:'720px', background:'#0f1720', color:'#fff', padding:'20px', borderRadius:'10px', fontFamily:"'Press Start 2P',monospace", textAlign:'center' });
+  Object.assign(panel.style, { width: mobile ? 'min(460px,94%)' : 'min(640px,90%)', maxWidth:'720px', maxHeight:'88vh', overflowY:'auto', background:'#0f1720', color:'#fff', padding: mobile ? '14px' : '20px', borderRadius:'10px', fontFamily:"'Press Start 2P',monospace", textAlign:'center' });
 
-  const title = document.createElement('div'); title.innerText = 'GAME OVER'; title.style.fontSize='28px'; title.style.color='#ff5a5a'; panel.appendChild(title);
-  const scoreLine = document.createElement('div'); scoreLine.innerText = `SCORE: ${score}`; scoreLine.style.margin='12px 0'; panel.appendChild(scoreLine);
-  const nameLine = document.createElement('div'); nameLine.innerText = `PLAYER: ${escapeHtml(currentPlayerName || 'Player')}`; nameLine.style.marginBottom='12px'; panel.appendChild(nameLine);
+  const title = document.createElement('div'); title.innerText = 'GAME OVER'; title.style.fontSize=`${getResponsiveTextSize(28, 20)}px`; title.style.color='#ff5a5a'; panel.appendChild(title);
+  const scoreLine = document.createElement('div'); scoreLine.innerText = `SCORE: ${score}`; scoreLine.style.margin='10px 0 8px'; scoreLine.style.fontSize=`${getResponsiveTextSize(14, 11)}px`; panel.appendChild(scoreLine);
+  const nameLine = document.createElement('div'); nameLine.innerText = `PLAYER: ${escapeHtml(currentPlayerName || 'Player')}`; nameLine.style.marginBottom='10px'; nameLine.style.fontSize=`${getResponsiveTextSize(14, 11)}px`; panel.appendChild(nameLine);
   nameLine.style.fontFamily = "'Press Start 2P', monospace";
   // editable name input for post-game renaming
   const nameEditWrap = document.createElement('div'); nameEditWrap.style.display='flex'; nameEditWrap.style.justifyContent='center'; nameEditWrap.style.gap='8px'; nameEditWrap.style.marginBottom='8px';
+  if (mobile) { nameEditWrap.style.flexDirection = 'column'; nameEditWrap.style.alignItems = 'stretch'; }
   const nameInput = document.createElement('input'); nameInput.value = currentPlayerName || 'Player'; nameInput.maxLength = 16;
-  Object.assign(nameInput.style, { padding:'8px', borderRadius:'6px', border:'1px solid rgba(255,255,255,0.12)', fontFamily:"'Press Start 2P',monospace", fontSize:'12px' });
+  Object.assign(nameInput.style, { padding:'8px', borderRadius:'6px', border:'1px solid rgba(255,255,255,0.12)', fontFamily:"'Press Start 2P',monospace", fontSize: `${getResponsiveTextSize(12, 10)}px`, width: mobile ? '100%' : 'auto', boxSizing: 'border-box' });
   // ensure overlay input doesn't let Kaboom steal events
   nameInput.tabIndex = 0;
   ['keydown','keypress','keyup','input'].forEach(ev => nameInput.addEventListener(ev, (e)=>{ e.stopPropagation(); }));
   ['mousedown','touchstart','click'].forEach(ev => nameInput.addEventListener(ev, (e)=>{ e.stopPropagation(); }));
-  const updBtn = document.createElement('button'); updBtn.innerText = 'Update Name'; Object.assign(updBtn.style, { padding:'8px 10px', borderRadius:'6px', border:'none', background:'#f1c40f', cursor:'pointer', fontFamily: "'Press Start 2P', monospace", fontSize: '12px' });
+  const updBtn = document.createElement('button'); updBtn.innerText = 'Update Name'; Object.assign(updBtn.style, { padding:'8px 10px', borderRadius:'6px', border:'none', background:'#f1c40f', cursor:'pointer', fontFamily: "'Press Start 2P', monospace", fontSize: `${getResponsiveTextSize(12, 10)}px`, width: mobile ? '100%' : 'auto' });
   nameEditWrap.appendChild(nameInput); nameEditWrap.appendChild(updBtn); panel.appendChild(nameEditWrap);
 
   // round stats: apples eaten and walls eaten during blue
   const statsWrap = document.createElement('div');
   statsWrap.style.margin = '10px 0 14px';
   statsWrap.style.fontFamily = "'Press Start 2P', monospace";
-  statsWrap.style.fontSize = '12px';
+  statsWrap.style.fontSize = `${getResponsiveTextSize(12, 10)}px`;
   statsWrap.style.textAlign = 'left';
   statsWrap.style.display = 'grid';
   statsWrap.style.gridTemplateColumns = '1fr auto';
-  statsWrap.style.rowGap = '6px';
+  statsWrap.style.rowGap = mobile ? '4px' : '6px';
   function addStat(label, val, color) {
     const l = document.createElement('div');
     l.innerText = label;
@@ -2635,7 +2977,7 @@ function showGameOverOverlay(){
   panel.appendChild(statsWrap);
 
   function refreshLeaderboardDisplay(){
-    renderLeaderboardTableInto(lbWrap);
+    renderLeaderboardTableInto(lbWrap, lbOpts);
   }
 
   updBtn.addEventListener('click', ()=>{
@@ -2656,18 +2998,18 @@ function showGameOverOverlay(){
   setTopNameInputState(true);
 
   const lb = loadLeaderboard();
-  const lbWrap = document.createElement('div'); lbWrap.style.textAlign='left'; lbWrap.style.maxHeight='none'; lbWrap.style.overflow='visible'; lbWrap.style.margin='6px 0';
+  const lbWrap = document.createElement('div'); lbWrap.style.textAlign='left'; lbWrap.style.maxHeight= mobile ? '220px' : 'none'; lbWrap.style.overflow='auto'; lbWrap.style.margin='6px 0'; lbWrap.style.border='1px solid rgba(255,255,255,0.12)'; lbWrap.style.borderRadius='8px'; lbWrap.style.padding='4px';
   if (lb.length===0) lbWrap.innerHTML = '<div style="opacity:.8">No scores yet</div>';
-  else renderLeaderboardTableInto(lbWrap);
+  else renderLeaderboardTableInto(lbWrap, lbOpts);
   panel.appendChild(lbWrap);
 
   const btn = document.createElement('button'); btn.innerText = 'RESTART';
-  Object.assign(btn.style, { marginTop:'10px', padding:'10px 18px', borderRadius:'8px', border:'none', background:'#2ecc71', color:'#08220b', cursor:'pointer', fontFamily:"'Press Start 2P',monospace" });
+  Object.assign(btn.style, { marginTop:'10px', padding:'10px 18px', borderRadius:'8px', border:'none', background:'#2ecc71', color:'#08220b', cursor:'pointer', fontFamily:"'Press Start 2P',monospace", width: mobile ? '100%' : 'auto' });
   btn.addEventListener('click', ()=>{ overlay.remove(); resetGame(); });
   panel.appendChild(btn);
 
   const resetLb = document.createElement('button'); resetLb.innerText = 'RESET LEADERBOARD';
-  Object.assign(resetLb.style, { marginTop:'10px', marginLeft:'8px', padding:'10px 12px', borderRadius:'8px', border:'none', background:'#ff6b6b', color:'#fff', cursor:'pointer', fontFamily:"'Press Start 2P',monospace" });
+  Object.assign(resetLb.style, { marginTop:'10px', marginLeft: mobile ? '0' : '8px', padding:'10px 12px', borderRadius:'8px', border:'none', background:'#ff6b6b', color:'#fff', cursor:'pointer', fontFamily:"'Press Start 2P',monospace", width: mobile ? '100%' : 'auto' });
   resetLb.addEventListener('click', ()=>{
     try { if (!confirm('Really reset the leaderboard? This cannot be undone.')) return; } catch(e) { }
     try { clearLeaderboard(); } catch(e){}
@@ -2680,6 +3022,8 @@ function showGameOverOverlay(){
 
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
+  applyResponsiveDomFonts();
+  applyResponsiveUiLayout();
   try { overlay.focus(); } catch(e){}
 }
 
@@ -2717,6 +3061,8 @@ function showHelpOverlay(){
   panel.appendChild(close);
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
+  applyResponsiveDomFonts();
+  applyResponsiveUiLayout();
 }
 
 /* =======================
